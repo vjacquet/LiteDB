@@ -13,10 +13,12 @@ namespace LiteDB.Platform
         private readonly LazyLoad<IFileHandler> _fileHandler;
         private readonly LazyLoad<IReflectionHandler> _reflectionHandler;
         
-        public LitePlatformWindowsStore()
+        public LitePlatformWindowsStore() : this (Windows.Storage.ApplicationData.Current.LocalFolder) { }
+
+        public LitePlatformWindowsStore(StorageFolder folder)
         {
 #if WINDOWS_UWP
-            _fileHandler = new LazyLoad<IFileHandler>(() => new FileHandlerUWP(Windows.Storage.ApplicationData.Current.LocalFolder));
+            _fileHandler = new LazyLoad<IFileHandler>(() => new FileHandlerUWP(folder));
 #else
             _fileHandler = new LazyLoad<IFileHandler>(() => new FileHandlerWindowsStore(Windows.Storage.ApplicationData.Current.LocalFolder));
 #endif
@@ -41,34 +43,7 @@ namespace LiteDB.Platform
 
         public void AddNameCollectionToMapper()
         {
-#if WINDOWS_UWP
-            BsonMapper.Global.RegisterType(
-               nv =>
-               {
-                   var doc = new BsonDocument();
 
-                   foreach (var key in nv.AllKeys)
-                   {
-                       doc[key] = nv[key];
-                   }
-
-                   return doc;
-               },
-
-               bson =>
-               {
-                   var nv = new NameValueCollection();
-                   var doc = bson.AsDocument;
-
-                   foreach (var key in doc.Keys)
-                   {
-                       nv[key] = doc[key].AsString;
-                   }
-
-                   return nv;
-               }
-            );
-#endif
         }
     }
 }
