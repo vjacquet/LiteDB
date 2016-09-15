@@ -272,7 +272,7 @@ namespace LiteDB.Tests
             Assert.AreEqual(obj.MyObjectList[1], obj.MyObjectList[1]);
             Assert.AreEqual(obj.MyObjectList[3], obj.MyObjectList[3]);
 
-#if !PCL
+#if !PCL && !NETFX_CORE
             Assert.AreEqual(nobj.MyInternalProperty, null);
 #endif
         }
