@@ -22,7 +22,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>LiteDB\bin\Debug\</OutputPath>
-    <DefineConstants>TRACE;DEBUG;PCL</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;NETSTANDARD</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -269,6 +269,21 @@
     </Compile>
     <Compile Include="..\LiteDB\Interfaces\IReflectionHandler.cs">
       <Link>Interfaces\IReflectionHandler.cs</Link>
+    </Compile>
+    <Compile Include="..\LiteDB\Platform\ExpressionReflectionHandler.cs">
+      <Link>Platform\ExpressionReflectionHandler.cs</Link>
+    </Compile>
+    <Compile Include="..\LiteDB\Platform\FileHandler.cs">
+      <Link>Platform\FileHandler.cs</Link>
+    </Compile>
+    <Compile Include="..\LiteDB\Platform\FileHandlerSyncOverAsync.cs">
+      <Link>Platform\FileHandlerSyncOverAsync.cs</Link>
+    </Compile>
+    <Compile Include="..\LiteDB\Platform\LitePlatformStandardDefault.cs">
+      <Link>Platform\LitePlatformStandardDefault.cs</Link>
+    </Compile>
+    <Compile Include="..\LiteDB\Platform\RijndaelEncryption.cs">
+      <Link>Platform\RijndaelEncryption.cs</Link>
     </Compile>
     <Compile Include="..\LiteDB\Properties\AssemblyInfo.cs">
       <Link>Properties\AssemblyInfo.cs</Link>

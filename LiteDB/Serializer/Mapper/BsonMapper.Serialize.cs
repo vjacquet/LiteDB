@@ -87,7 +87,7 @@ namespace LiteDB
             // for dictionary
             else if (obj is IDictionary)
             {
-#if PCL
+#if PCL || NETSTANDARD
                 var itemType = type.GetTypeInfo().GenericTypeArguments[1];
 #else
                 var itemType = type.GetGenericArguments()[1];

@@ -7,6 +7,16 @@ namespace LiteDB
     /// </summary>
     public partial class LiteDatabase
     {
+#if NETSTANDARD
+        static LiteDatabase()
+        {
+            if (LitePlatform.Platform == null)
+            {
+                LitePlatform.Initialize(new Platform.LitePlatformStandardDefault());
+            }
+        }
+#endif
+
         public const int PAGE_SIZE = BasePage.PAGE_SIZE;
 
         private LazyLoad<DbEngine> _engine;

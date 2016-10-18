@@ -194,7 +194,7 @@ namespace LiteDB
 
         private object DeserializeList(Type type, BsonArray value)
         {
-#if PCL
+#if PCL || NETSTANDARD
 			var typeInfo = type.GetTypeInfo();
             var itemType = typeInfo.GenericTypeArguments.FirstOrDefault() 
                    ?? typeInfo.ImplementedInterfaces.First(i => i.GetTypeInfo().IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>)).GetTypeInfo().GenericTypeArguments.First();
@@ -213,7 +213,7 @@ namespace LiteDB
             }
             else
             {
-#if PCL
+#if PCL || NETSTANDARD
                 var addMethod = type.GetRuntimeMethod("Add", new Type[1] { itemType });
 #else
                 var addMethod = type.GetMethod("Add");

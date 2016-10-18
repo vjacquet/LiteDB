@@ -28,7 +28,7 @@ namespace LiteDB
             {
                 // If connectionstring is only a filename, set filename
                 _values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-#if PCL
+#if PCL || NETSTANDARD
                 _values["filename"] = connectionString;
 #else
                 _values["filename"] = Path.GetFullPath(connectionString);

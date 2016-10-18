@@ -19,7 +19,7 @@ namespace LiteDB
         /// </summary>
         public static PropertyInfo GetIdProperty(Type type)
         {
-#if PCL
+#if PCL || NETSTANDARD
             return SelectProperty(type.GetRuntimeProperties(),
 #else
             // Get all properties and test in order: BsonIdAttribute, "Id" name, "<typeName>Id" name
@@ -69,7 +69,7 @@ namespace LiteDB
             var idAttr = typeof(BsonIdAttribute);
             var fieldAttr = typeof(BsonFieldAttribute);
             var indexAttr = typeof(BsonIndexAttribute);
-#if PCL
+#if PCL || NETSTANDARD
             var props = type.GetRuntimeProperties();
 #else
             var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.NonPublic);
@@ -189,7 +189,7 @@ namespace LiteDB
                         }
                         else if (type.GetTypeInfo().IsGenericType && type.GetGenericTypeDefinition() == typeof(IDictionary<,>))
                         {
-#if PCL
+#if PCL || NETSTANDARD
                             var k = type.GetTypeInfo().GenericTypeArguments[0];
                             var v = type.GetTypeInfo().GenericTypeArguments[1];
 #else
@@ -252,7 +252,7 @@ namespace LiteDB
             var type = list.GetType();
 
             if (type.IsArray) return type.GetElementType();
-#if PCL
+#if PCL || NETSTANDARD
             foreach (var i in type.GetTypeInfo().ImplementedInterfaces)
 #else
             foreach (var i in type.GetInterfaces())
@@ -260,7 +260,7 @@ namespace LiteDB
             {
                 if (i.GetTypeInfo().IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))
                 {
-#if PCL
+#if PCL || NETSTANDARD
                     return i.GetTypeInfo().GenericTypeArguments[0];
 #else
                     return i.GetGenericArguments()[0];
@@ -278,7 +278,7 @@ namespace LiteDB
         {
             if (type.IsArray) return true;
 
-#if PCL
+#if PCL || NETSTANDARD
             foreach (Type @interface in type.GetTypeInfo().ImplementedInterfaces)
 #else
             foreach (Type @interface in type.GetInterfaces())

@@ -647,7 +647,7 @@ namespace LiteDB
                 return text;
             }
             // removing accents
-#if PCL
+#if  PCL || NETSTANDARD
             var normalized = text; // TODO szurgot: Normalize doesn't seem to exist in PCL
 #else
             var normalized = text.Normalize(NormalizationForm.FormD);
