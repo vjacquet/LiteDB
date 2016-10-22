@@ -110,7 +110,7 @@ namespace LiteDB.Tests
             Assert.AreEqual(doc["PRIVATE-PROPERTY"].AsString, obj.GetMyPrivatePropertyNamed());
             Assert.AreEqual(doc["PROTECTED-PROPERTY"].AsString, obj.GetMyProtectedPropertyNamed());
             Assert.AreEqual(obj.MyString, nobj.MyString);
-#if !PCL
+#if !PCL && !NETSTANDARD
             //Internal
             Assert.AreEqual(obj.MyInternalPropertyNamed, nobj.MyInternalPropertyNamed);
             Assert.AreEqual(obj.MyInternalPropertySerializable, nobj.MyInternalPropertySerializable);

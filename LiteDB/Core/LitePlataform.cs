@@ -28,5 +28,12 @@ namespace LiteDB
         {
             Platform = platform;
         }
+
+#if NETSTANDARD
+        public static void InitializeDefault(String path = ".", bool useAsyncFileHandler = false)
+        {
+            Initialize(new Platform.LitePlatformDotNetStandardDefault(path, useAsyncFileHandler));
+        }
+#endif
     }
 }
