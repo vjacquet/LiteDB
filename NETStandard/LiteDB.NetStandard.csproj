@@ -5,7 +5,7 @@
     <MinimumVisualStudioVersion>14.0</MinimumVisualStudioVersion>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{D89F51CC-FC13-43E4-B9EF-062A8A56121E}</ProjectGuid>
+    <ProjectGuid>{1C165BC0-D782-4E19-B0C5-3EC35E89426A}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>LiteDB.NetCore</RootNamespace>
