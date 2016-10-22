@@ -12,7 +12,7 @@ namespace LiteDB
         {
             if (LitePlatform.Platform == null)
             {
-                LitePlatform.Initialize(new Platform.LitePlatformStandardDefault());
+                LitePlatform.Initialize(new Platform.LitePlatformDotNetStandardDefault());
             }
         }
 #endif

@@ -7,7 +7,7 @@ using System.Data;
 namespace LiteDB.Tests
 {
     [TestClass]
-    public class DataTableTest
+    public class DataTableTest : TestBase
     {
         [TestMethod]
         public void DataTable_Test()

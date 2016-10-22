@@ -139,13 +139,13 @@
     <Compile Include="TestPlatform.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\NETStandard\LiteDB.NetStandard.csproj">
-      <Project>{1c165bc0-d782-4e19-b0c5-3ec35e89426a}</Project>
-      <Name>LiteDB.NetStandard</Name>
-    </ProjectReference>
+    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
+    <ProjectReference Include="..\..\NETStandard\LiteDB.NetStandard.csproj">
+      <Project>{d89f51cc-fc13-43e4-b9ef-062a8a56121e}</Project>
+      <Name>LiteDB.NetStandard</Name>
+    </ProjectReference>
   </ItemGroup>
   <Choose>
     <When Condition="'$(VisualStudioVersion)' == '10.0' And '$(IsCodedUITest)' == 'True'">
