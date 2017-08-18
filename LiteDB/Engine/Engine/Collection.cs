@@ -14,7 +14,10 @@ namespace LiteDB
             using (_locker.Shared()) {
                 var header = _pager.GetPage<HeaderPage>(0);
 
-                return header.CollectionPages.Keys.ToArray(); // make a copy so enumerating won't happen outside of the lock.
+                // make a copy so enumerating won't happen outside of the lock,
+                // thus avoiding a potential InvalidOperationException if the dictionary 
+                // changes while enumerating.
+                return header.CollectionPages.Keys.ToArray(); 
             }
         }
 
@@ -25,7 +28,8 @@ namespace LiteDB
         {
             if (name.IsNullOrWhiteSpace()) throw new ArgumentNullException("name");
 
-            using (_locker.Shared()) {
+            using (_locker.Shared())
+            {
                 var header = _pager.GetPage<HeaderPage>(0);
 
                 return header.CollectionPages.ContainsKey(name);

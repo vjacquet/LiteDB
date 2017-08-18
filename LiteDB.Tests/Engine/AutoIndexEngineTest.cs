@@ -28,8 +28,8 @@ namespace LiteDB.Tests
 
                 Assert.AreEqual(doc["name"], result["name"]);
 
-                var indexName = db.GetIndexes("people").FirstOrDefault(x => x.Field == "name");
-                var indexAge = db.GetIndexes("people").FirstOrDefault(x => x.Field == "age");
+                var indexName = db.GetIndex("people", "name");
+                var indexAge = db.GetIndex("people", "age");
 
                 // indexes are not unique (by default, when using LiteEngine)
                 Assert.AreEqual(false, indexName.Unique);

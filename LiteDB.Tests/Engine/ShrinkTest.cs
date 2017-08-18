@@ -20,8 +20,8 @@ namespace LiteDB.Tests
             {
                 Assert.AreEqual(1, db.Count("col", null));
                 Assert.AreEqual(99, db.UserVersion);
-                Assert.IsNotNull(db.GetIndexes("col").FirstOrDefault(x => x.Field == "name"));
-                Assert.IsTrue(db.GetIndexes("col").FirstOrDefault(x => x.Field == "name").Unique);
+                Assert.IsNotNull(db.GetIndex("col", "name"));
+                Assert.IsTrue(db.GetIndex("col", "name").Unique);
             };
 
             using (var file = new TempFile())
