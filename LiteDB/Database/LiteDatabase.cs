@@ -72,7 +72,8 @@ namespace LiteDB
                 FileMode = _connectionString.Mode
             };
 
-            _engine = new LazyLoad<LiteEngine>(() => new LiteEngine(new FileDiskService(_connectionString.Filename, options), _connectionString.Password, _connectionString.Timeout, _connectionString.CacheSize, _log));
+            var diskService = new FileDiskService(_connectionString.Filename, options);
+            _engine = new LazyLoad<LiteEngine>(() => new LiteEngine(diskService, _connectionString.Password, _connectionString.Timeout, _connectionString.CacheSize, _log));
         }
 
         /// <summary>
@@ -84,7 +85,8 @@ namespace LiteDB
 
             _mapper = mapper ?? BsonMapper.Global;
 
-            _engine = new LazyLoad<LiteEngine>(() => new LiteEngine(new StreamDiskService(stream), password: password, log: _log));
+            var diskService = new StreamDiskService(stream);
+            _engine = new LazyLoad<LiteEngine>(() => new LiteEngine(diskService, password: password, log: _log));
         }
 
         /// <summary>
@@ -114,9 +116,10 @@ namespace LiteDB
         /// </summary>
         public LiteTransaction BeginTrans()
         {
-            _engine.Value.BeginTrans();
+            var engine = _engine.Value;
+            engine.BeginTrans();
 
-            return new LiteTransaction(() => _engine.Value.Commit(), _engine.Value.Rollback);
+            return new LiteTransaction(() => engine.Commit(), engine.Rollback);
         }
 
         #endregion
