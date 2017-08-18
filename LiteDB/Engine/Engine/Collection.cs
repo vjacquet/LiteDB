@@ -11,11 +11,24 @@ namespace LiteDB
         /// </summary>
         public IEnumerable<string> GetCollectionNames()
         {
-            using (_locker.Shared())
-            {
+            using (_locker.Shared()) {
                 var header = _pager.GetPage<HeaderPage>(0);
 
-                return header.CollectionPages.Keys.AsEnumerable();
+                return header.CollectionPages.Keys.ToArray(); // make a copy so enumerating won't happen outside of the lock.
+            }
+        }
+
+        /// <summary>
+        /// Checks if a collection exists on database. Collection name is case insensitive
+        /// </summary>
+        public bool CollectionExists(string name)
+        {
+            if (name.IsNullOrWhiteSpace()) throw new ArgumentNullException("name");
+
+            using (_locker.Shared()) {
+                var header = _pager.GetPage<HeaderPage>(0);
+
+                return header.CollectionPages.ContainsKey(name);
             }
         }
 
@@ -26,8 +39,7 @@ namespace LiteDB
         {
             if (collection.IsNullOrWhiteSpace()) throw new ArgumentNullException("collection");
 
-            return this.Transaction<bool>(collection, false, (col) =>
-            {
+            return this.Transaction<bool>(collection, false, (col) => {
                 if (col == null) return false;
 
                 _log.Write(Logger.COMMAND, "drop collection {0}", collection);
@@ -46,15 +58,13 @@ namespace LiteDB
             if (collection.IsNullOrWhiteSpace()) throw new ArgumentNullException("collection");
             if (newName.IsNullOrWhiteSpace()) throw new ArgumentNullException("newName");
 
-            return this.Transaction<bool>(collection, false, (col) =>
-            {
+            return this.Transaction<bool>(collection, false, (col) => {
                 if (col == null) return false;
 
                 _log.Write(Logger.COMMAND, "rename collection '{0}' -> '{1}'", collection, newName);
 
                 // check if newName already exists
-                if (this.GetCollectionNames().Contains(newName, StringComparer.OrdinalIgnoreCase))
-                {
+                if (this.CollectionExists(newName)) {
                     throw LiteException.AlreadyExistsCollectionName(newName);
                 }
 
