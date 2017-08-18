@@ -21,16 +21,18 @@ namespace LiteDB
             using (var engine = new LiteEngine(temp, password))
             {
                 // read all collection
-                foreach (var collectionName in this.GetCollectionNames())
+                foreach (var col in _collections.GetAll())
                 {
+                    var collectionName = col.CollectionName;
+
                     // first create all user indexes (exclude _id index)
-                    foreach (var index in this.GetIndexes(collectionName).Where(x => x.Field != "_id"))
+                    foreach (var index in col.GetIndexes(false))
                     {
                         engine.EnsureIndex(collectionName, index.Field, index.Unique);
                     }
 
                     // now copy documents 
-                    var docs = this.Find(collectionName, Query.All());
+                    var docs = this.FindAll(collectionName);
 
                     engine.InsertBulk(collectionName, docs);
                 }
@@ -42,7 +44,7 @@ namespace LiteDB
                 _disk.SetLength(temp.FileLength);
 
                 // read new header page to start copy
-                var header = BasePage.ReadPage(temp.ReadPage(0)) as HeaderPage;
+                var header = (HeaderPage)BasePage.ReadPage(temp.ReadPage(0));
 
                 // copy (as is) all pages from temp disk to original disk
                 for (uint i = 0; i <= header.LastPageID; i++)
