@@ -12,9 +12,10 @@ namespace LiteDB.Engine
         private readonly float[] _target;
         private readonly double _maxDistance;
         private readonly int? _limit;
+        private readonly bool _applyLimit;
         private readonly Collation _collation;
 
-        private readonly Dictionary<PageAddress, BsonDocument> _cache = new Dictionary<PageAddress, BsonDocument>();
+        private readonly Dictionary<PageAddress, (BsonDocument Document, double Score)> _cache = new Dictionary<PageAddress, (BsonDocument, double)>();
 
         public string Expression => _index.Expression;
 
@@ -26,7 +27,8 @@ namespace LiteDB.Engine
             float[] target,
             double maxDistance,
             int? limit,
-            Collation collation)
+            Collation collation,
+            bool applyLimit = true)
             : base(name, Query.Ascending)
         {
             _snapshot = snapshot;
@@ -35,6 +37,7 @@ namespace LiteDB.Engine
             _target = target;
             _maxDistance = maxDistance;
             _limit = limit;
+            _applyLimit = applyLimit;
             _collation = collation;
         }
 
@@ -53,7 +56,7 @@ namespace LiteDB.Engine
             _cache.Clear();
 
             var service = new VectorIndexService(_snapshot, _collation);
-            var results = service.Search(_metadata, _target, _maxDistance, _limit).ToArray();
+            var results = service.Search(_metadata, _target, _maxDistance, _limit, _applyLimit).ToArray();
 
             foreach (var result in results)
             {
@@ -64,7 +67,7 @@ namespace LiteDB.Engine
                     continue;
                 }
 
-                _cache[rawId] = result.Document;
+                _cache[rawId] = (result.Document, result.Distance);
                 yield return new IndexNode(result.Document);
             }
         }
@@ -76,8 +79,30 @@ namespace LiteDB.Engine
 
         public BsonDocument Load(PageAddress rawId)
         {
-            return _cache.TryGetValue(rawId, out var document) ? document : null;
+            return _cache.TryGetValue(rawId, out var result) ? result.Document : null;
         }
+
+        internal bool Matches(VectorScoreProjection projection)
+        {
+            return string.Equals(Expression, projection.Field, StringComparison.OrdinalIgnoreCase) &&
+                _target.SequenceEqual(projection.Target);
+        }
+
+        internal bool TryGetScore(PageAddress rawId, out double score)
+        {
+            score = default;
+            if (!_cache.TryGetValue(rawId, out var result))
+            {
+                return false;
+            }
+
+            score = result.Score;
+            return true;
+        }
+
+        internal double GetScore(PageAddress rawId) => _cache[rawId].Score;
+
+        internal LiteDB.Vector.VectorDistanceMetric Metric => _metadata.Metric;
 
         public override string ToString()
         {
