@@ -11,7 +11,7 @@ namespace LiteDB.Engine
     /// <summary>
     /// Represent a single snapshot
     /// </summary>
-    internal class Snapshot : IDisposable
+    internal partial class Snapshot : IDisposable
     {
         // instances from Engine
         private readonly HeaderPage _header;
@@ -382,36 +382,7 @@ namespace LiteDB.Engine
                 // there is need for _header.Savepoint() because changes here will incremental and will be persist later
                 // if any problem occurs here, rollback will catch this changes
 
-                // try get page from Empty free list
-                if (_header.FreeEmptyPageList != uint.MaxValue &&
-                    _header.FreeEmptyPageList <= _header.LastPageID)
-                {
-                    var free = this.GetPage<BasePage>(_header.FreeEmptyPageList, useLatestVersion: true);
-
-                    if (free.PageType == PageType.Empty)
-                    {
-                        // Consume one verified page at a time. This keeps a valid
-                        // prefix reusable without scanning the whole list on open.
-                        _header.FreeEmptyPageList = free.NextPageID;
-                        free.NextPageID = uint.MaxValue;
-                        pageID = free.PageID;
-                        buffer = free.Buffer;
-                    }
-                    else
-                    {
-                        // Legacy databases can point the tail at a live page.
-                        // Drop only the invalid suffix; never reuse that page.
-                        _header.FreeEmptyPageList = uint.MaxValue;
-                    }
-                }
-
-                if (_header.FreeEmptyPageList > _header.LastPageID &&
-                    _header.FreeEmptyPageList != uint.MaxValue)
-                {
-                    _header.FreeEmptyPageList = uint.MaxValue;
-                }
-
-                if (pageID == 0)
+                if (this.TryAllocateFreePage(out pageID, out buffer) == false)
                 {
                     // checks if not exceeded data file limit size
                     var newLength = (_header.LastPageID + 1) * PAGE_SIZE;
