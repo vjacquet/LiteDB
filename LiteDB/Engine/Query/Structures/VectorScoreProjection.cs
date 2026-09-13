@@ -23,6 +23,7 @@ namespace LiteDB.Engine
             BsonExpression select, VectorIndexQuery index, Collation collation)
         {
             var useIndexScore = index != null && index.Matches(this);
+            var defaultName = select.DefaultFieldName();
             foreach (var document in source)
             {
                 var metric = VectorDistanceMetric.Cosine;
@@ -37,10 +38,13 @@ namespace LiteDB.Engine
                     score = _fallback.ExecuteScalar(document, collation);
                 }
 
+                var value = select.ExecuteScalar(document, collation);
+                var projected = value.IsDocument ? value.AsDocument : new BsonDocument { [defaultName] = value };
+
                 // Keep metadata outside the user's document, including documents with Score fields.
                 yield return new BsonDocument
                 {
-                    ["Document"] = select.ExecuteScalar(document, collation),
+                    ["Document"] = projected,
                     ["Score"] = score,
                     ["Metric"] = (int)metric
                 };

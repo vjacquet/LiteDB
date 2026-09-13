@@ -21,7 +21,7 @@ namespace LiteDB.Tests
             var collection = db.GetCollection<Item>("items");
             collection.Insert(new[]
             {
-                new Item { Id = 1, Embedding = new[] { 2f, 0f }, Score = "stored" },
+                new Item { Id = 1, Embedding = new[] { 1.75f, 0f }, Score = "stored" },
                 new Item { Id = 2, Embedding = new[] { 1f, 1f }, Score = "stored" },
                 new Item { Id = 3, Embedding = new[] { -1f, 0f }, Score = "stored" }
             });
@@ -47,8 +47,8 @@ namespace LiteDB.Tests
             results.Select(x => x.Id).Should().Equal(1, 2);
             results.Should().OnlyContain(x => x.Score == "stored");
             results.Should().OnlyContain(x => x.Metric == (metric ?? VectorDistanceMetric.Cosine));
-            var expected = metric == VectorDistanceMetric.DotProduct ? new[] { 2d, 1d }
-                : metric == VectorDistanceMetric.Euclidean ? new[] { 1d, 1d }
+            var expected = metric == VectorDistanceMetric.DotProduct ? new[] { 1.75d, 1d }
+                : metric == VectorDistanceMetric.Euclidean ? new[] { 0.75d, 1d }
                 : new[] { 0d, 1d - 1d / Math.Sqrt(2d) };
             for (var i = 0; i < results.Length; i++)
             {
@@ -94,7 +94,7 @@ namespace LiteDB.Tests
             var stringHit = collection.Query().TopKNearWithScore("vector", target, 1).Single();
             var expressionHit = collection.Query().TopKNearWithScore(BsonExpression.Create("$.vector"), target, 1).Single();
 
-            stringHit.Score.Should().Be(2);
+            stringHit.Score.Should().Be(1.75);
             expressionHit.Score.Should().Be(stringHit.Score);
             stringHit.Document["Score"].AsString.Should().Be("stored");
             collection.FindById(1).Keys.Should().BeEquivalentTo("_id", "vector", "Score");
@@ -112,7 +112,7 @@ namespace LiteDB.Tests
             var scored = query.WithScore().ToArray();
 
             scored.Select(x => x.Document).Should().Equal(query.ToArray());
-            scored[0].Score.Should().Be(indexed ? 2 : 0);
+            scored[0].Score.Should().Be(indexed ? 1.75 : 0);
             query.ToDocuments().First().Keys.Should().NotContain("Document");
         }
 
@@ -127,8 +127,8 @@ namespace LiteDB.Tests
             query.Limit(1);
             target[0] = -1;
 
-            results.Select(x => x.Score).Should().Equal(2d, 1d);
-            results.Select(x => x.Score).Should().Equal(2d, 1d);
+            results.Select(x => x.Score).Should().Equal(1.75d, 1d);
+            results.Select(x => x.Score).Should().Equal(1.75d, 1d);
         }
 
         [Fact]
@@ -202,7 +202,20 @@ namespace LiteDB.Tests
 
             result.Document.Id.Should().Be(1);
             result.Document.Score.Should().Be("stored");
-            result.Score.Should().Be(2);
+            result.Score.Should().Be(1.75);
+        }
+
+        [Fact]
+        public void BsonScalarProjection_PreservesOrdinaryDocumentShape()
+        {
+            using var db = new LiteDatabase(":memory:");
+            var collection = Populate(db, VectorDistanceMetric.DotProduct);
+            var query = collection.Query().WhereNear(x => x.Embedding, new[] { 1f, 0f }, 1.5)
+                .Select(BsonExpression.Create("$._id"));
+            var result = query.WithScore().Single();
+
+            Assert.Equal(query.Single(), result.Document);
+            result.Score.Should().Be(1.75);
         }
 
         [Fact]
