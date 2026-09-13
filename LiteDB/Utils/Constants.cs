@@ -1,15 +1,19 @@
 ﻿using LiteDB.Engine;
+
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
-#if DEBUG
 [assembly: InternalsVisibleTo("LiteDB.Tests")]
+#if DEBUG || TESTING
+[assembly: InternalsVisibleTo("ConsoleApp1")]
 #endif
 
 namespace LiteDB
 {
+    using System.Globalization;
+
     /// <summary>
     /// Class with all constants used in LiteDB + Debbuger HELPER
     /// </summary>
@@ -72,18 +76,18 @@ namespace LiteDB
         public const int MAX_OPEN_TRANSACTIONS = 100;
 
         /// <summary>
-        /// Define how many pages all transaction will consume, in memory, before persist in disk. This amount are shared across all open transactions
-        /// 100,000 ~= 1Gb memory
+        /// Default number of pages one transaction can retain before a
+        /// cooperative safepoint.
         /// </summary>
-        public const int MAX_TRANSACTION_SIZE = 100_000; // 100_000 (default) - 1000 (for tests)
+        public const int MAX_TRANSACTION_SIZE = 1_000;
+
+        public const long DEFAULT_CACHE_SIZE = 64L * 1024 * 1024;
+        public const long MEMORY_CACHE_SIZE = 8L * 1024 * 1024;
 
         /// <summary>
-        /// Size, in PAGES, for each buffer array (used in MemoryStore)
-        /// It's an array to increase after each extend - limited in highest value
-        /// Each byte array will be created with this size * PAGE_SIZE
-        /// Use minimal 12 to allocate at least 85Kb per segment (will use LOH)
+        /// Size, in pages, for the first and subsequent cache segments.
         /// </summary>
-        public static int[] MEMORY_SEGMENT_SIZES = new int[] { 12, 50, 100, 500, 1000 }; // 8Mb per extend
+        public static int[] MEMORY_SEGMENT_SIZES = new int[] { 8, 128 };
 
         /// <summary>
         /// Define how many documents will be keep in memory until clear cache and remove support to orderby/groupby
@@ -94,7 +98,16 @@ namespace LiteDB
         /// Define how many bytes each merge sort container will be created
         /// </summary>
         public const int CONTAINER_SORT_SIZE = 100 * PAGE_SIZE;
-        
+
+        /// <summary>
+        /// Initial seed for Random
+        /// </summary>
+#if DEBUG || TESTING
+        public const int RANDOMIZER_SEED = 3131;
+#else
+        public const int RANDOMIZER_SEED = 0;
+#endif
+
         /// <summary>
         /// Log a message using Debug.WriteLine
         /// </summary>
@@ -127,12 +140,26 @@ namespace LiteDB
             {
                 if (Debugger.IsAttached)
                 {
-                    Debug.Fail(message);
+                    Debugger.Break();
                 }
-                else
+
+                throw LiteException.InvalidDatafileState(message);
+            }
+        }
+
+        [DebuggerHidden]
+        public static void ENSURE(bool conditional, string format, params object[] args)
+        {
+            if (conditional == false)
+            {
+                if (Debugger.IsAttached)
                 {
-                    throw new Exception("LiteDB ENSURE: " + message);
+                    Debugger.Break();
                 }
+
+                var message = string.Format(CultureInfo.InvariantCulture, format, args);
+
+                throw LiteException.InvalidDatafileState(message);
             }
         }
 
@@ -146,12 +173,10 @@ namespace LiteDB
             {
                 if (Debugger.IsAttached)
                 {
-                    Debug.Fail(message);
+                    Debugger.Break();
                 }
-                else
-                {
-                    throw new Exception("LiteDB ENSURE: " + message);
-                }
+
+                throw LiteException.InvalidDatafileState(message);
             }
         }
 
@@ -166,12 +191,10 @@ namespace LiteDB
             {
                 if (Debugger.IsAttached)
                 {
-                    Debug.Fail(message);
+                    Debugger.Break();
                 }
-                else
-                {
-                    throw new Exception("LiteDB DEBUG: " + message);
-                }
+
+                throw LiteException.InvalidDatafileState(message);
             }
         }
     }

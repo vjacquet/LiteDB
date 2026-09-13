@@ -11,7 +11,7 @@ namespace LiteDB
     {
         private readonly static IFormatProvider _numberFormat = CultureInfo.InvariantCulture.NumberFormat;
 
-        private TextWriter _writer;
+        private readonly TextWriter _writer;
         private int _indent;
         private string _spacer = "";
 
@@ -71,7 +71,17 @@ namespace LiteDB
                     break;
 
                 case BsonType.Double:
-                    _writer.Write(value.AsDouble.ToString("0.0########", _numberFormat));
+                    var d = value.AsDouble;
+
+                    if (double.IsNaN(d) || double.IsNegativeInfinity(d) || double.IsPositiveInfinity(d))
+                    {
+                        _writer.Write("null");
+                    }
+                    else
+                    {
+                        _writer.Write(value.AsDouble.ToString("0.0########", _numberFormat));
+                    }
+
                     break;
 
                 case BsonType.Binary:
@@ -105,6 +115,12 @@ namespace LiteDB
 
                 case BsonType.MaxValue:
                     this.WriteExtendDataType("$maxValue", "1");
+                    break;
+
+                case BsonType.Vector:
+                    var vector = value.AsVector;
+                    var array = new BsonArray(vector.Select(x => (BsonValue)x));
+                    this.WriteArray(array);
                     break;
             }
         }

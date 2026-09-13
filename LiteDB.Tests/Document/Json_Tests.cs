@@ -75,5 +75,37 @@ namespace LiteDB.Tests.Document
             JsonSerializer.Deserialize(positiveDouble.ToString("F1", CultureInfo.InvariantCulture)).Should().Be(positiveDouble);
             JsonSerializer.Deserialize(negativeDouble.ToString("F1", CultureInfo.InvariantCulture)).Should().Be(negativeDouble);
         }
+
+        [Fact]
+        public void Json_DoubleNaN_Tests()
+        {
+            BsonDocument doc = new BsonDocument();
+            doc["doubleNaN"] = double.NaN;
+            doc["doubleNegativeInfinity"] = double.NegativeInfinity;
+            doc["doublePositiveInfinity"] = double.PositiveInfinity;
+
+            // Convert to JSON
+            string json = JsonSerializer.Serialize(doc);
+
+            var bson = JsonSerializer.Deserialize(json);
+
+            // JSON standard converts NaN and Infinities to null, so deserialized values should not be double.NaN nor double.*Infinity
+            Assert.False(double.IsNaN(bson["doubleNaN"].AsDouble));
+            Assert.False(double.IsNegativeInfinity(bson["doubleNegativeInfinity"].AsDouble));
+            Assert.False(double.IsPositiveInfinity(bson["doublePositiveInfinity"].AsDouble));
+        }
+
+        [Fact]
+        public void Json_Writes_BsonVector_As_Array()
+        {
+            var document = new BsonDocument
+            {
+                ["Embedding"] = new BsonVector(new float[] { 1.0f, 2.5f, -3.75f })
+            };
+
+            var json = JsonSerializer.Serialize(document);
+
+            json.Should().Contain("\"Embedding\":[1.0,2.5,-3.75]");
+        }
     }
 }

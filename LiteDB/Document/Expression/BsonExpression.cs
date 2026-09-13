@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -279,8 +278,9 @@ namespace LiteDB
 
         #region Static method
 
-        private static ConcurrentDictionary<string, BsonExpressionEnumerableDelegate> _cacheEnumerable = new ConcurrentDictionary<string, BsonExpressionEnumerableDelegate>();
-        private static ConcurrentDictionary<string, BsonExpressionScalarDelegate> _cacheScalar = new ConcurrentDictionary<string, BsonExpressionScalarDelegate>();
+        private static readonly CompiledExpressionCache _compiledCache = new CompiledExpressionCache(1000);
+
+        internal static int CompiledExpressionCount => _compiledCache.Count;
 
         /// <summary>
         /// Parse string and create new instance of BsonExpression - can be cached
@@ -354,27 +354,41 @@ namespace LiteDB
 
         internal static void Compile(BsonExpression expr, ExpressionContext context)
         {
+            // Nested path/filter expressions are parsed and compiled with
+            // their own ExpressionContext before being embedded in the outer
+            // expression. A concurrent cap rollover can clear their cache
+            // entry before the outer recursive walk reaches them; recompiling
+            // such an expression against the outer context produces an
+            // invalid lambda. Its instance delegate is already complete and
+            // remains valid independently of cache eviction.
+            if (expr.IsScalar ? expr._funcScalar != null : expr._funcEnumerable != null)
+            {
+                return;
+            }
+
             // compile linq expression according with return type (scalar or enumerable)
             // in both case, try use cached compiled version
             if (expr.IsScalar)
             {
-                var cached = _cacheScalar.GetOrAdd(expr.Source, s =>
+                var cached = _compiledCache.Get<BsonExpressionScalarDelegate>(expr.Source);
+                if (cached == null)
                 {
                     var lambda = System.Linq.Expressions.Expression.Lambda<BsonExpressionScalarDelegate>(expr.Expression, context.Source, context.Root, context.Current, context.Collation, context.Parameters);
-
-                    return lambda.Compile();
-                });
+                    cached = lambda.Compile();
+                    _compiledCache.Add(expr.Source, cached);
+                }
 
                 expr._funcScalar = cached;
             }
             else
             {
-                var cached = _cacheEnumerable.GetOrAdd(expr.Source, s =>
+                var cached = _compiledCache.Get<BsonExpressionEnumerableDelegate>(expr.Source);
+                if (cached == null)
                 {
                     var lambda = System.Linq.Expressions.Expression.Lambda<BsonExpressionEnumerableDelegate>(expr.Expression, context.Source, context.Root, context.Current, context.Collation, context.Parameters);
-
-                    return lambda.Compile();
-                });
+                    cached = lambda.Compile();
+                    _compiledCache.Add(expr.Source, cached);
+                }
 
                 expr._funcEnumerable = cached;
             }
@@ -412,16 +426,16 @@ namespace LiteDB
         /// <summary>
         /// Load all static methods from BsonExpressionMethods class. Use a dictionary using name + parameter count
         /// </summary>
-        private static Dictionary<string, MethodInfo> _methods =
+        private static readonly Dictionary<string, MethodInfo> _methods =
             typeof(BsonExpressionMethods).GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .ToDictionary(m => m.Name.ToUpper() + "~" + m.GetParameters().Where(p => p.ParameterType != typeof(Collation)).Count());
+            .ToDictionary(m => m.Name.ToUpperInvariant() + "~" + m.GetParameters().Where(p => p.ParameterType != typeof(Collation)).Count());
 
         /// <summary>
         /// Get expression method with same name and same parameter - return null if not found
         /// </summary>
         internal static MethodInfo GetMethod(string name, int parameterCount)
         {
-            var key = name.ToUpper() + "~" + parameterCount;
+            var key = name.ToUpperInvariant() + "~" + parameterCount;
 
             return _methods.GetOrDefault(key);
         }
@@ -438,9 +452,9 @@ namespace LiteDB
         /// <summary>
         /// Load all static methods from BsonExpressionFunctions class. Use a dictionary using name + parameter count
         /// </summary>
-        private static Dictionary<string, MethodInfo> _functions =
+        private static readonly Dictionary<string, MethodInfo> _functions =
             typeof(BsonExpressionFunctions).GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .ToDictionary(m => m.Name.ToUpper() + "~" + m.GetParameters()
+            .ToDictionary(m => m.Name.ToUpperInvariant() + "~" + m.GetParameters()
             .Skip(5).Count());
 
         /// <summary>
@@ -448,7 +462,7 @@ namespace LiteDB
         /// </summary>
         internal static MethodInfo GetFunction(string name, int parameterCount = 0)
         {
-            var key = name.ToUpper() + "~" + parameterCount;
+            var key = name.ToUpperInvariant() + "~" + parameterCount;
 
             return _functions.GetOrDefault(key);
         }

@@ -10,7 +10,7 @@ namespace LiteDB.Engine
     /// </summary>
     internal class IndexIn : Index
     {
-        private BsonArray _values;
+        private readonly BsonArray _values;
 
         public IndexIn(string name, BsonArray values, int order)
             : base(name, order)
@@ -35,6 +35,8 @@ namespace LiteDB.Engine
                 {
                     yield return node;
                 }
+
+                indexer.Safepoint();
             }
         }
 

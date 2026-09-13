@@ -35,6 +35,9 @@ namespace LiteDB
             ["+"] = Tuple.Create("+", M("ADD"), BsonExpressionType.Add),
             ["-"] = Tuple.Create("-", M("MINUS"), BsonExpressionType.Subtract),
 
+            // vector similarity operator returns the cosine distance between two vectors
+            ["VECTOR_SIM"] = Tuple.Create(" VECTOR_SIM ", M("VECTOR_SIM"), BsonExpressionType.VectorSim),
+
             // predicate
             ["LIKE"] = Tuple.Create(" LIKE ", M("LIKE"), BsonExpressionType.Like),
             ["BETWEEN"] = Tuple.Create(" BETWEEN ", M("BETWEEN"), BsonExpressionType.Between),
@@ -74,7 +77,7 @@ namespace LiteDB
 
             // logic (will use Expression.AndAlso|OrElse)
             ["AND"] = Tuple.Create(" AND ", (MethodInfo)null, BsonExpressionType.And),
-            ["OR"] = Tuple.Create(" OR ", (MethodInfo)null, BsonExpressionType.Or)
+            ["OR"] = Tuple.Create(" OR ", (MethodInfo)null, BsonExpressionType.Or),
         };
 
         private static readonly MethodInfo _parameterPathMethod = M("PARAMETER_PATH");
@@ -121,7 +124,7 @@ namespace LiteDB
                 }
 
                 values.Add(expr);
-                ops.Add(op.ToUpper());
+                ops.Add(op.ToUpperInvariant());
             }
 
             var order = 0;
@@ -888,7 +891,7 @@ namespace LiteDB
             var useSource = false;
             var fields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            src.Append(token.Value.ToUpper() + "(");
+            src.Append(token.Value.ToUpperInvariant() + "(");
 
             // method call with no parameters
             if (tokenizer.LookAhead().Type == TokenType.CloseParenthesis)
@@ -926,7 +929,7 @@ namespace LiteDB
 
             var method = BsonExpression.GetMethod(token.Value, pars.Count);
 
-            if (method == null) throw LiteException.UnexpectedToken($"Method '{token.Value.ToUpper()}' does not exist or contains invalid parameters", token);
+            if (method == null) throw LiteException.UnexpectedToken($"Method '{token.Value.ToUpperInvariant()}' does not exist or contains invalid parameters", token);
 
             // test if method are decorated with "Variable" (immutable = false)
             if (method.GetCustomAttribute<VolatileAttribute>() != null)
@@ -1170,13 +1173,16 @@ namespace LiteDB
             if (tokenizer.Current.Type != TokenType.Word) return null;
             if (tokenizer.LookAhead().Type != TokenType.OpenParenthesis) return null;
 
-            var token = tokenizer.Current.Value.ToUpper();
+            var token = tokenizer.Current.Value.ToUpperInvariant();
 
             switch (token)
             {
                 case "MAP": return ParseFunction(token, BsonExpressionType.Map, tokenizer, context, parameters, scope);
                 case "FILTER": return ParseFunction(token, BsonExpressionType.Filter, tokenizer, context, parameters, scope);
                 case "SORT": return ParseFunction(token, BsonExpressionType.Sort, tokenizer, context, parameters, scope);
+                case "VECTOR_SIM":
+                    return ParseFunction(token, BsonExpressionType.VectorSim, tokenizer, context, parameters, scope,
+                        convertScalarLeftToEnumerable: false, isScalarResult: true);
             }
 
             return null;
@@ -1186,7 +1192,7 @@ namespace LiteDB
         /// Parse expression functions, like MAP, FILTER or SORT.
         /// MAP(items[*] => @.Name)
         /// </summary>
-        private static BsonExpression ParseFunction(string functionName, BsonExpressionType type, Tokenizer tokenizer, ExpressionContext context, BsonDocument parameters, DocumentScope scope)
+        private static BsonExpression ParseFunction(string functionName, BsonExpressionType type, Tokenizer tokenizer, ExpressionContext context, BsonDocument parameters, DocumentScope scope, bool convertScalarLeftToEnumerable = true, bool isScalarResult = false)
         {
             // check if next token are ( otherwise returns null (is not a function)
             if (tokenizer.LookAhead().Type != TokenType.OpenParenthesis) return null;
@@ -1197,7 +1203,7 @@ namespace LiteDB
             var left = ParseSingleExpression(tokenizer, context, parameters, scope);
 
             // if left is a scalar expression, convert into enumerable expression (avoid to use [*] all the time)
-            if (left.IsScalar)
+            if (convertScalarLeftToEnumerable && left.IsScalar)
             {
                 left = ConvertToEnumerable(left);
             }
@@ -1269,7 +1275,7 @@ namespace LiteDB
                 Parameters = parameters,
                 IsImmutable = isImmutable,
                 UseSource = useSource,
-                IsScalar = false,
+                IsScalar = isScalarResult,
                 Fields = fields,
                 Expression = Expression.Call(method, args.ToArray()),
                 Source = src.ToString()
@@ -1385,7 +1391,7 @@ namespace LiteDB
 
             if (token.Is("ALL") || token.Is("ANY"))
             {
-                var key = token.Value.ToUpper();
+                var key = token.Value.ToUpperInvariant();
 
                 tokenizer.ReadToken(); // consume operant
 
@@ -1474,7 +1480,7 @@ namespace LiteDB
                 Expression = Expression.New(ctor, expr),
                 Left = left,
                 Right = right,
-                Source = left.Source + " " + (type.ToString().ToUpper()) + " " + right.Source
+                Source = left.Source + " " + (type.ToString().ToUpperInvariant()) + " " + right.Source
             };
 
             return result;

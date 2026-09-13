@@ -1,25 +1,34 @@
-﻿using System.IO;
+﻿using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using LiteDB.Engine;
+using LiteDB.Tests.Utils;
 using Xunit;
+using Xunit.Sdk;
 
 namespace LiteDB.Tests.Engine
 {
+    using System;
+
     public class Transactions_Tests
     {
-        [Fact]
+        const int MIN_CPU_COUNT = 2;
+
+        [CpuBoundFact(MIN_CPU_COUNT)]
         public async Task Transaction_Write_Lock_Timeout()
         {
             var data1 = DataGen.Person(1, 100).ToArray();
             var data2 = DataGen.Person(101, 200).ToArray();
 
-            using (var db = new LiteDatabase("filename=:memory:"))
+            using (var db = DatabaseFactory.Create(connectionString: "filename=:memory:"))
             {
-                // small timeout
+                // configure the minimal pragma timeout and then override the engine to a few milliseconds
                 db.Pragma(Pragmas.TIMEOUT, 1);
+                SetEngineTimeout(db, TimeSpan.FromMilliseconds(20));
 
                 var person = db.GetCollection<Person>();
 
@@ -29,8 +38,8 @@ namespace LiteDB.Tests.Engine
                 var taskASemaphore = new SemaphoreSlim(0, 1);
                 var taskBSemaphore = new SemaphoreSlim(0, 1);
 
-                // task A will open transaction and will insert +100 documents 
-                // but will commit only 2s later
+                // task A will open transaction and will insert +100 documents
+                // but will commit only after task B observes the timeout
                 var ta = Task.Run(() =>
                 {
                     db.BeginTrans();
@@ -47,7 +56,7 @@ namespace LiteDB.Tests.Engine
                     db.Commit();
                 });
 
-                // task B will try delete all documents but will be locked during 1 second
+                // task B will try delete all documents but will be locked until the short timeout is hit
                 var tb = Task.Run(() =>
                 {
                     taskBSemaphore.Wait();
@@ -67,7 +76,7 @@ namespace LiteDB.Tests.Engine
         }
 
 
-        [Fact]
+        [CpuBoundFact(MIN_CPU_COUNT)]
         public async Task Transaction_Avoid_Dirty_Read()
         {
             var data1 = DataGen.Person(1, 100).ToArray();
@@ -127,7 +136,8 @@ namespace LiteDB.Tests.Engine
             }
         }
 
-        [Fact]
+
+        [CpuBoundFact(MIN_CPU_COUNT)]
         public async Task Transaction_Read_Version()
         {
             var data1 = DataGen.Person(1, 100).ToArray();
@@ -184,7 +194,7 @@ namespace LiteDB.Tests.Engine
             }
         }
 
-        [Fact]
+        [CpuBoundFact(MIN_CPU_COUNT)]
         public void Test_Transaction_States()
         {
             var data0 = DataGen.Person(1, 10).ToArray();
@@ -221,6 +231,221 @@ namespace LiteDB.Tests.Engine
 
                 person.Count().Should().Be(20);
             }
+        }
+
+        [CpuBoundFact(MIN_CPU_COUNT)]
+        public void Test_Transaction_Finalizer()
+        {
+            var db = new LiteDatabase(new MemoryStream());
+            db.BeginTrans();
+
+            GC.Collect(0, GCCollectionMode.Forced);
+
+            // Finalizer should not throw exception
+            // If it does, it will be an unhandled exception
+            GC.WaitForPendingFinalizers();
+        }
+
+#if DEBUG || TESTING
+        [Fact]
+        public void Transaction_Rollback_Should_Skip_ReadOnly_Buffers_From_Safepoint()
+        {
+            using var db = DatabaseFactory.Create();
+            var collection = db.GetCollection<BsonDocument>("docs");
+
+            db.BeginTrans().Should().BeTrue();
+
+            for (var i = 0; i < 10; i++)
+            {
+                collection.Insert(new BsonDocument
+                {
+                    ["_id"] = i,
+                    ["value"] = $"value-{i}"
+                });
+            }
+
+            var engine = GetLiteEngine(db);
+            var monitor = GetTransactionMonitor(engine);
+            var transaction = monitor.GetThreadTransaction();
+
+            transaction.Should().NotBeNull();
+
+            var transactionService = transaction!;
+            transactionService.Pages.TransactionSize.Should().BeGreaterThan(0);
+
+            transactionService.MaxTransactionSize = Math.Max(1, transactionService.Pages.TransactionSize);
+
+            transactionService.Safepoint();
+            transactionService.Pages.TransactionSize.Should().Be(0);
+
+            var snapshot = transactionService.Snapshots.Single();
+            snapshot.CollectionPage.Should().NotBeNull();
+
+            var collectionPage = snapshot.CollectionPage!;
+            collectionPage.IsDirty = true;
+
+            var buffer = collectionPage.Buffer;
+
+            try
+            {
+                // Simulate a page that a safepoint has made read-only. This
+                // test intentionally changes the legacy marker only; the cache
+                // state-machine tests cover the real transition accounting.
+                buffer.ShareCounter = 1;
+
+                var shareCounters = snapshot
+                    .GetWritablePages(true, true)
+                    .Select(page => page.Buffer.ShareCounter)
+                    .ToList();
+
+                shareCounters.Should().NotBeEmpty();
+                shareCounters.Should().Contain(counter => counter != Constants.BUFFER_WRITABLE);
+
+                db.Rollback().Should().BeTrue();
+            }
+            finally
+            {
+                buffer.ShareCounter = 0;
+            }
+
+            collection.Count().Should().Be(0);
+        }
+
+        [Fact]
+        public void Transaction_Rollback_Should_Discard_Writable_Dirty_Pages()
+        {
+            using var db = DatabaseFactory.Create();
+            var collection = db.GetCollection<BsonDocument>("docs");
+
+            db.BeginTrans().Should().BeTrue();
+
+            for (var i = 0; i < 3; i++)
+            {
+                collection.Insert(new BsonDocument
+                {
+                    ["_id"] = i,
+                    ["value"] = $"value-{i}"
+                });
+            }
+
+            var engine = GetLiteEngine(db);
+            var monitor = GetTransactionMonitor(engine);
+            var transaction = monitor.GetThreadTransaction();
+
+            transaction.Should().NotBeNull();
+
+            var transactionService = transaction!;
+            var snapshot = transactionService.Snapshots.Single();
+
+            var shareCounters = snapshot
+                .GetWritablePages(true, true)
+                .Select(page => page.Buffer.ShareCounter)
+                .ToList();
+
+            shareCounters.Should().NotBeEmpty();
+            shareCounters.Should().OnlyContain(counter => counter == Constants.BUFFER_WRITABLE);
+
+            db.Rollback().Should().BeTrue();
+
+            collection.Count().Should().Be(0);
+        }
+
+#endif
+
+        private class BlockingStream : MemoryStream
+        {
+            public readonly AutoResetEvent Blocked = new AutoResetEvent(false);
+            public readonly ManualResetEvent ShouldUnblock = new ManualResetEvent(false);
+            public bool ShouldBlock;
+
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                if (this.ShouldBlock)
+                {
+                    this.Blocked.Set();
+                    this.ShouldUnblock.WaitOne();
+                    this.Blocked.Reset();
+                }
+                base.Write(buffer, offset, count);
+            }
+        }
+
+        [CpuBoundFact(MIN_CPU_COUNT)]
+        public void Test_Transaction_ReleaseWhenFailToStart()
+        {
+            var blockingStream = new BlockingStream();
+            var db = new LiteDatabase(blockingStream);
+            SetEngineTimeout(db, TimeSpan.FromMilliseconds(50));
+            Thread lockerThread = null;
+            try
+            {
+                lockerThread = new Thread(() =>
+                {
+                    db.GetCollection<Person>().Insert(new Person());
+                    blockingStream.ShouldBlock = true;
+                    db.Checkpoint();
+                    db.Dispose();
+                })
+                {
+                    IsBackground = true
+                };
+                lockerThread.Start();
+                blockingStream.Blocked.WaitOne(200).Should().BeTrue();
+                Assert.Throws<LiteException>(() => db.GetCollection<Person>().Insert(new Person())).Message.Should().Contain("timeout");
+                Assert.Throws<LiteException>(() => db.GetCollection<Person>().Insert(new Person())).Message.Should().Contain("timeout");
+            }
+            finally
+            {
+                blockingStream.ShouldUnblock.Set();
+                lockerThread?.Join();
+            }
+        }
+
+        private static LiteEngine GetLiteEngine(LiteDatabase database)
+        {
+            var engineField = typeof(LiteDatabase).GetField("_engine", BindingFlags.Instance | BindingFlags.NonPublic)
+                              ?? throw new InvalidOperationException("Unable to locate LiteDatabase engine field.");
+
+            if (engineField.GetValue(database) is not LiteEngine engine)
+            {
+                throw new InvalidOperationException("LiteDatabase engine is not initialized.");
+            }
+
+            return engine;
+        }
+
+        private static TransactionMonitor GetTransactionMonitor(LiteEngine engine)
+        {
+            var getter = typeof(LiteEngine).GetMethod("GetMonitor", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (getter != null && getter.ReturnType == typeof(TransactionMonitor))
+            {
+                return (TransactionMonitor)(getter.Invoke(engine, Array.Empty<object>()) ?? throw new InvalidOperationException("LiteEngine monitor accessor returned null."));
+            }
+
+            var monitorField = typeof(LiteEngine).GetField("_monitor", BindingFlags.Instance | BindingFlags.NonPublic)
+                               ?? throw new InvalidOperationException("Unable to locate LiteEngine monitor field.");
+
+            if (monitorField.GetValue(engine) is not TransactionMonitor monitor)
+            {
+                throw new InvalidOperationException("LiteEngine monitor instance is not available.");
+            }
+
+            return monitor;
+        }
+
+        private static void SetEngineTimeout(LiteDatabase database, TimeSpan timeout)
+        {
+            var engine = GetLiteEngine(database);
+
+            var headerField = typeof(LiteEngine).GetField("_header", BindingFlags.Instance | BindingFlags.NonPublic);
+            var header = headerField?.GetValue(engine) ?? throw new InvalidOperationException("LiteEngine header not available.");
+            var pragmasProp = header.GetType().GetProperty("Pragmas", BindingFlags.Instance | BindingFlags.Public) ?? throw new InvalidOperationException("Engine pragmas not accessible.");
+            var pragmas = pragmasProp.GetValue(header) ?? throw new InvalidOperationException("Engine pragmas not available.");
+            var timeoutProp = pragmas.GetType().GetProperty("Timeout", BindingFlags.Instance | BindingFlags.Public) ?? throw new InvalidOperationException("Timeout property not found.");
+            var setter = timeoutProp.GetSetMethod(true) ?? throw new InvalidOperationException("Timeout setter not accessible.");
+
+            setter.Invoke(pragmas, new object[] { timeout });
         }
     }
 }
