@@ -100,6 +100,8 @@ namespace LiteDB.Engine
             return true;
         }
 
+        internal double GetScore(PageAddress rawId) => _cache[rawId].Score;
+
         internal LiteDB.Vector.VectorDistanceMetric Metric => _metadata.Metric;
 
         public override string ToString()

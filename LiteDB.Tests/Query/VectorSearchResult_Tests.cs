@@ -218,6 +218,32 @@ namespace LiteDB.Tests
             result.Score.Should().Be(1.75);
         }
 
+        [Theory]
+        [InlineData(VectorDistanceMetric.Cosine, new[] { 4, 3, 1 }, new[] { 0d, 0d, 0d })]
+        [InlineData(VectorDistanceMetric.Euclidean, new[] { 4, 3, 2 }, new[] { 0d, 1d, 1d })]
+        [InlineData(VectorDistanceMetric.DotProduct, new[] { 1, 3, 4 }, new[] { 3d, 2d, 1d })]
+        public void TopK_PreservesMetricAndSecondarySortKeys(VectorDistanceMetric metric, int[] ids, double[] scores)
+        {
+            using var db = new LiteDatabase(":memory:");
+            var collection = db.GetCollection<Item>();
+            collection.Insert(new[]
+            {
+                new Item { Id = 1, Embedding = new[] { 3f, 0f } },
+                new Item { Id = 2, Embedding = new[] { 1f, 1f } },
+                new Item { Id = 3, Embedding = new[] { 2f, 0f } },
+                new Item { Id = 4, Embedding = new[] { 1f, 0f } }
+            });
+            collection.EnsureIndex(x => x.Embedding, new VectorIndexOptions(2, metric));
+            var query = collection.Query();
+            query.TopKNear(x => x.Embedding, new[] { 1f, 0f }, 3);
+            query.ThenByDescending(x => x.Id);
+
+            query.GetPlan()["orderBy"].IsArray.Should().BeTrue();
+            var results = query.WithScore().ToArray();
+            results.Select(x => x.Document.Id).Should().Equal(ids);
+            results.Select(x => x.Score.Value).Should().Equal(scores);
+        }
+
         [Fact]
         public void WithScore_ValidatesQueryAndArguments()
         {

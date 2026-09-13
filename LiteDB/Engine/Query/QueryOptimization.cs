@@ -320,13 +320,20 @@ namespace LiteDB.Engine
             // if has no order by, returns null
             if (_query.OrderBy.Count == 0) return;
 
+            var segments = _query.OrderBy.Select(x => new OrderByItem(x.Expression, x.Order)).ToArray();
             if (_vectorOrderConsumed)
             {
-                _queryPlan.OrderBy = null;
-                return;
+                if (segments.Length == 1 && segments[0].Order == Query.Ascending) return;
+
+                // Retain the metric score as the primary key so ThenBy only breaks score ties.
+                // Re-evaluating VECTOR_SIM here would replace Euclidean/dot-product scores with cosine.
+                var index = (VectorIndexQuery)_queryPlan.Index;
+                var direction = index.Metric == LiteDB.Vector.VectorDistanceMetric.DotProduct ? -1 : 1;
+                segments[0] = new OrderByItem(segments[0].Expression, segments[0].Order * direction,
+                    document => index.GetScore(document.RawId));
             }
 
-            var orderBy = new OrderBy(_query.OrderBy.Select(x => new OrderByItem(x.Expression, x.Order)));
+            var orderBy = new OrderBy(segments);
 
             // if index expression are same as primary OrderBy segment, use index order configuration
             if (orderBy.PrimaryExpression.Source == _queryPlan.IndexExpression)

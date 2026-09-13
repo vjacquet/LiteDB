@@ -55,10 +55,13 @@ namespace LiteDB.Engine
             int? limit = _query.Limit != int.MaxValue
                 ? (int)Math.Min((long)_query.Limit + _query.Offset, int.MaxValue)
                 : (int?)null;
+            var primaryVectorOrder = matchedFromOrderBy && _query.OrderBy.Count > 0 &&
+                _query.OrderBy[0].Expression.Type == BsonExpressionType.VectorSim;
             var selectedTerm = consumedTerm;
             var applyLimit = _query.Offset == 0 && _query.GroupBy == null &&
                 !_terms.Any(term => term != selectedTerm) &&
-                (_query.OrderBy.Count == 0 || (matchedFromOrderBy && _query.OrderBy.Count == 1));
+                (_query.OrderBy.Count == 0 || (primaryVectorOrder && _query.OrderBy.Count == 1 &&
+                    _query.OrderBy[0].Order == Query.Ascending));
 
             foreach (var (candidate, metadata) in _snapshot.CollectionPage.GetVectorIndexes())
             {
@@ -74,7 +77,7 @@ namespace LiteDB.Engine
 
                 index = new VectorIndexQuery(candidate.Name, _snapshot, candidate, metadata, target, maxDistance, limit, _collation, applyLimit);
 
-                if (matchedFromOrderBy)
+                if (primaryVectorOrder)
                 {
                     _vectorOrderConsumed = true;
                 }
