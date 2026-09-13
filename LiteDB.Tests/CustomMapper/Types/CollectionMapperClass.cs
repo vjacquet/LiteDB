@@ -19,7 +19,7 @@ namespace LiteDB.Tests.CustomMapper
         private object DeserializeCollectionObject(Type type, BsonDocument value)
         {
             var array = base.Deserialize(type,(BsonArray) value["_items"]);
-            DeserializeObject(type,array,value);
+            DeserializeObject(type, array, value);
             return array;
         }
 
@@ -35,7 +35,7 @@ namespace LiteDB.Tests.CustomMapper
         private BsonDocument SerializeCollectionClass(Type type, object obj, int depth)
         {
             var doc = SerializeObject(type, obj, depth);
-            doc["_items"] = SerializeArray(GetListItemType(type),(IEnumerable) obj, depth);
+            doc["_items"] = SerializeArray(GetListItemType(type, obj),(IEnumerable) obj, depth);
             return doc;
         }
     }

@@ -3,17 +3,15 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using LiteDB.Tests.CustomMapper.Types;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xunit;
 
 namespace LiteDB.Tests.CustomMapper
 {
-    [TestClass]
     public class Custom_Mapper_Tests
     {
         private BsonMapper _mapper;
 
-        [TestInitialize]
-        public void Initialize()
+        public Custom_Mapper_Tests()
         {
             _mapper = new CollectionMapperClass();
         }
@@ -30,22 +28,21 @@ namespace LiteDB.Tests.CustomMapper
             });
             return items;
         }
-        [TestMethod]
-        public BsonDocument ShouldSerializeCollectionClass()
+        [Fact]
+        public void ShouldSerializeCollectionClass()
         {
             var items = CreateCollection();
 
             var document = _mapper.ToDocument(items);
-            Assert.AreEqual("MyCollection", (string)document["MyItemCollectionName"]);
+            Assert.Equal("MyCollection", (string)document["MyItemCollectionName"]);
 
             var array = (BsonArray)document["_items"];
-            Assert.IsNotNull(array);
+            Assert.NotNull(array);
             var recoveritem = (BsonDocument)array[0];
-            Assert.AreEqual("MyItem", (string)recoveritem["MyItemName"]);
-            return document;
+            Assert.Equal("MyItem", (string)recoveritem["MyItemName"]);
         }
 
-        [TestMethod]
+        [Fact]
         public void ShouldDeserializeCollectionClass()
         {
 
@@ -55,26 +52,26 @@ namespace LiteDB.Tests.CustomMapper
 
             var lst = (ItemCollection)_mapper.Deserialize(typeof(ItemCollection), document);
 
-            Assert.AreEqual("MyCollection", lst.MyItemCollectionName);
-            Assert.AreEqual(lst.Count, 1);
-            Assert.IsInstanceOfType(lst[0], typeof(Item));
-            Assert.AreEqual(lst[0].MyItemName,"MyItem");
+            Assert.Equal("MyCollection", lst.MyItemCollectionName);
+            Assert.Single(lst);
+            Assert.IsType<Item>(lst[0]);
+            Assert.Equal("MyItem", lst[0].MyItemName);
         }
 
-        [TestMethod]
+        [Fact]
         public void ShouldInsertIntoDatabaseAndRecover()
         {
             var items = CreateCollection();
             using (var repository = new LiteRepository(new MemoryStream(), _mapper))
             {
                var result= repository.Upsert<ItemCollection>(items);
-                Assert.IsTrue(result);
-                Assert.AreNotEqual(Guid.Empty,items.Id);
+                Assert.True(result);
+                Assert.NotEqual(Guid.Empty,items.Id);
                 var lst = repository.SingleById<ItemCollection>(items.Id);
-                Assert.AreEqual("MyCollection", lst.MyItemCollectionName);
-                Assert.AreEqual(lst.Count, 1);
-                Assert.IsInstanceOfType(lst[0], typeof(Item));
-                Assert.AreEqual(lst[0].MyItemName, "MyItem");
+                Assert.Equal("MyCollection", lst.MyItemCollectionName);
+                Assert.Single(lst);
+                Assert.IsType<Item>(lst[0]);
+                Assert.Equal("MyItem", lst[0].MyItemName);
             }
         }
     }
