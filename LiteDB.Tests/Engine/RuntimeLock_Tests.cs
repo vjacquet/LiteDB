@@ -48,7 +48,7 @@ namespace LiteDB.Tests.Engine
         {
             const int pageCount = 32;
             const int workerCount = 8;
-            var cache = new MemoryCache(new[] { 1 });
+            using var cache = new MemoryCache(new[] { 1 }, pageCount * (long)Constants.PAGE_SIZE);
             var pages = new ConcurrentBag<PageBuffer>();
             using (var ready = new CountdownEvent(workerCount))
             using (var start = new ManualResetEventSlim())
