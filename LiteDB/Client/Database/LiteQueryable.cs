@@ -12,7 +12,7 @@ namespace LiteDB
     /// <summary>
     /// An IQueryable-like class to write fluent query in documents in collection.
     /// </summary>
-    public class LiteQueryable<T> : ILiteQueryable<T>
+    public partial class LiteQueryable<T> : ILiteQueryable<T>
     {
         protected readonly ILiteEngine _engine;
         protected readonly BsonMapper _mapper;
